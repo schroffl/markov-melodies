@@ -29,26 +29,30 @@ pub fn noteOff(self: *@This(), delay: u28, note: Note) !void {
     try writer.writeByte(127);
 }
 
-pub fn commit(self: *@This(), writer: std.fs.File.Writer) !void {
-    try writer.writeAll("MThd");
-    try writer.writeIntBig(u32, 6);
-    try writer.writeIntBig(u16, 0);
-    try writer.writeIntBig(u16, 1);
-    try writer.writeIntBig(u16, 480);
-
-    const len = @intCast(u32, 23 + self.buffer.items.len);
-
-    try writer.writeAll("MTrk");
-    try writer.writeIntBig(u32, len);
-
-    // Sequence name ""
-    try writer.writeByte(0x00);
+pub fn sequenceName(self: *@This(), name: []const u8) !void {
+    const writer = self.buffer.writer();
+    try int(writer, 0);
     try writer.writeByte(0xff);
     try writer.writeByte(0x03);
-    try writer.writeByte(0x00);
+    try int(writer, @intCast(u28, name.len));
+    try writer.writeAll(name);
+}
 
-    // Time Signature
-    try writer.writeByte(0x00);
+pub fn setTempo(self: *@This(), bpm: u9) !void {
+    const writer = self.buffer.writer();
+    const us_per_beat = std.time.us_per_min / @intCast(u64, bpm);
+
+    try int(writer, 0);
+    try writer.writeByte(0xff);
+    try writer.writeByte(0x51);
+    try writer.writeByte(0x03);
+    try writer.writeIntBig(u24, @intCast(u24, us_per_beat));
+}
+
+pub fn setSignature(self: *@This()) !void {
+    const writer = self.buffer.writer();
+
+    try int(writer, 0);
     try writer.writeByte(0xff);
     try writer.writeByte(0x58);
     try writer.writeByte(0x04);
@@ -57,13 +61,19 @@ pub fn commit(self: *@This(), writer: std.fs.File.Writer) !void {
     try writer.writeByte(0x02); // Denominator
     try writer.writeByte(0x18); // bb
     try writer.writeByte(0x08); // cc
+}
 
-    // Set Tempo
-    try writer.writeByte(0x00);
-    try writer.writeByte(0xff);
-    try writer.writeByte(0x51);
-    try writer.writeByte(0x03);
-    try writer.writeIntBig(u24, 500000);
+pub fn commit(self: *@This(), writer: std.fs.File.Writer) !void {
+    try writer.writeAll("MThd");
+    try writer.writeIntBig(u32, 6);
+    try writer.writeIntBig(u16, 0);
+    try writer.writeIntBig(u16, 1);
+    try writer.writeIntBig(u16, 480);
+
+    const len = @intCast(u32, 4 + self.buffer.items.len);
+
+    try writer.writeAll("MTrk");
+    try writer.writeIntBig(u32, len);
 
     try writer.writeAll(self.buffer.items);
     self.buffer.deinit();
@@ -75,7 +85,7 @@ pub fn commit(self: *@This(), writer: std.fs.File.Writer) !void {
     try writer.writeByte(0x00);
 }
 
-// Taken fro https://github.com/Hejsil/zig-midi/blob/master/midi/encode.zig
+// Taken from https://github.com/Hejsil/zig-midi/blob/master/midi/encode.zig
 pub fn int(writer: anytype, i: u28) !void {
     var tmp = i;
     var is_first = true;

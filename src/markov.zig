@@ -93,7 +93,7 @@ pub const RuleSet = std.ArrayList(Rule);
 
 pub const Interpreter = struct {
     pub const Config = struct {
-        max_count: usize,
+        max_count: ?usize,
     };
 
     state: std.ArrayList(u8),
@@ -113,11 +113,7 @@ pub const Interpreter = struct {
     }
 
     pub fn next(self: *Interpreter) !?Event {
-        if (self.count >= self.config.max_count) {
-            return null;
-        }
-
-        self.count += 1;
+        if (self.reachedMaxCount()) return null;
 
         var i: usize = 0;
 
@@ -136,11 +132,7 @@ pub const Interpreter = struct {
     }
 
     pub fn nextAlternative(self: *Interpreter) !?Event {
-        if (self.count >= self.config.max_count) {
-            return null;
-        }
-
-        self.count += 1;
+        if (self.reachedMaxCount()) return null;
 
         return for (self.rules.items) |rule| {
             var i: usize = 0;
@@ -158,5 +150,14 @@ pub const Interpreter = struct {
                 break rule.event;
             }
         } else null;
+    }
+
+    fn reachedMaxCount(self: *@This()) bool {
+        if (self.config.max_count) |max| {
+            self.count += 1;
+            return self.count > max;
+        }
+
+        return false;
     }
 };

@@ -19,18 +19,24 @@ pub const ParseError = error{
     NestedMultiEventsNotAllowed,
 } || std.mem.Allocator.Error;
 
-allocator: std.mem.Allocator,
+arena: std.heap.ArenaAllocator,
 tokenizer: Tokenizer,
 
 pub fn init(allocator: std.mem.Allocator, buffer: []const u8) @This() {
     return .{
-        .allocator = allocator,
+        .arena = std.heap.ArenaAllocator.init(allocator),
         .tokenizer = Tokenizer.init(buffer),
     };
 }
 
+pub fn deinit(self: *@This()) void {
+    self.arena.deinit();
+}
+
 pub fn parse(self: *@This()) !markov.RuleSet {
-    var root = markov.RuleSet.init(self.allocator);
+    const allocator = self.arena.allocator();
+
+    var root = markov.RuleSet.init(allocator);
     errdefer root.deinit();
 
     var state = ParserState.read_from;
@@ -118,17 +124,7 @@ fn parseNumber(self: @This(), comptime T: type, token: Tokenizer.Token) !T {
 }
 
 fn readNumber(comptime T: type, buffer: []const u8) T {
-    var idx: usize = 0;
-    var n: T = 0;
-
-    while (idx < buffer.len) : (idx += 1) {
-        const pos = @intCast(T, buffer.len - 1 - idx);
-        const digit = @intCast(u4, buffer[idx] - '0');
-
-        n += std.math.pow(T, 10, pos) * digit;
-    }
-
-    return n;
+    return std.fmt.parseInt(T, buffer, 10) catch unreachable;
 }
 
 fn parseEvent(self: *@This()) ParseError!markov.Event {
@@ -185,7 +181,9 @@ fn parseEvent(self: *@This()) ParseError!markov.Event {
 }
 
 fn parseChord(self: *@This()) !std.ArrayList(markov.Note) {
-    var list = std.ArrayList(markov.Note).init(self.allocator);
+    const allocator = self.arena.allocator();
+
+    var list = std.ArrayList(markov.Note).init(allocator);
     errdefer list.deinit();
 
     const next = try self.loadManyTokens(1);

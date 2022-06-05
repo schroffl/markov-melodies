@@ -1,51 +1,132 @@
 const std = @import("std");
+const clap = @import("clap");
 const markov = @import("./markov.zig");
 const Tokenizer = @import("./tokenizer.zig");
 const Parser = @import("./parser.zig");
 const midigen = @import("./midigen.zig");
 
-pub fn main() !u8 {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
+const io = std.io;
+const mem = std.mem;
 
-    var stderr = std.io.getStdErr();
-    var log = stderr.writer();
+var stderr = io.getStdErr().writer();
+var stdout = io.getStdOut().writer();
 
-    var args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+pub fn main() !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const allocator = arena.allocator();
+    defer arena.deinit();
 
-    if (args.len < 2) {
-        const exe_name = std.fs.path.basename(args[0]);
-        try log.print("Usage: {s} <file>\n", .{exe_name});
-        return 1;
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help               Display this text and exit.
+        \\-s, --speed <u28>        Multiplier for midi delta-time values
+        \\-t, --tempo <u9>         Tempo of the midi track
+        \\-m, --max-count <int>    Set the maximum amount of substitutions applied.
+        \\                         This can be used to break infinite loops.
+        \\<file>
+    );
+
+    const parsers = comptime .{
+        .int = clap.parsers.int(usize, 10),
+        .u28 = clap.parsers.int(u28, 10),
+        .u9 = clap.parsers.int(u9, 10),
+        .file = clap.parsers.string,
+    };
+
+    var diag = clap.Diagnostic{};
+    var res = clap.parse(clap.Help, &params, parsers, .{
+        .diagnostic = &diag,
+    }) catch |err| {
+        diag.report(stderr, err) catch {};
+        return err;
+    };
+    defer res.deinit();
+
+    const multiplier = res.args.speed orelse 120;
+
+    if (res.args.help) {
+        try clap.help(stderr, clap.Help, &params, .{});
+        return;
     }
 
-    const filename = args[1];
+    if (res.positionals.len < 1) {
+        const binary_name = try getBinaryName(allocator);
+        try stderr.writeAll(binary_name);
+        try stderr.writeByte(' ');
 
+        try clap.usage(stderr, clap.Help, &params);
+        try stderr.writeByte('\n');
+
+        return;
+    }
+
+    const filename = res.positionals[0];
     var file = try std.fs.cwd().openFile(filename, .{});
     defer file.close();
 
     const str = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(str);
+
     var parser = Parser.init(allocator, str);
+    defer parser.deinit();
 
+    var timer = try std.time.Timer.start();
     const result = try parser.parse();
-    defer result.deinit();
+    const took_parse = timer.read();
 
+    try stderr.print("Parsing took {d:.3}ms\n", .{nsToMs(took_parse)});
+
+    timer.reset();
+    try generateMidi(
+        allocator,
+        stdout,
+        result,
+        res.args.@"max-count",
+        multiplier,
+        res.args.tempo,
+    );
+    const took_execution = timer.read();
+
+    try stderr.print("Execution took {d:.3}ms\n", .{nsToMs(took_execution)});
+}
+
+fn getBinaryName(allocator: std.mem.Allocator) ![]const u8 {
+    var it = try std.process.argsWithAllocator(allocator);
+    defer it.deinit();
+
+    const name = std.fs.path.basename(it.next().?);
+    return allocator.dupe(u8, name);
+}
+
+fn nsToMs(ns: u64) f64 {
+    return @intToFloat(f64, ns) / std.time.ns_per_ms;
+}
+
+fn generateMidi(
+    allocator: std.mem.Allocator,
+    out: anytype,
+    result: markov.RuleSet,
+    max_count: ?usize,
+    multiplier: u28,
+    tempo: ?u9,
+) !void {
     var gen = midigen.init(allocator);
     var interp = try markov.Interpreter.init(allocator, "a", result, .{
-        .max_count = 1000,
+        .max_count = max_count,
     });
 
-    const speed_multiplier = 120;
     var delay: u28 = 0;
+
+    try gen.sequenceName("markov-melodies");
+    try gen.setSignature();
+    try gen.setTempo(tempo orelse 120);
 
     while (try interp.nextAlternative()) |event| {
         switch (event) {
             .none => {},
-            .pause => |duration| delay += @intCast(u28, duration) * speed_multiplier,
+            .pause => |duration| delay += @intCast(u28, duration) * multiplier,
             .single => |single| {
                 try gen.noteOn(delay, single.note);
-                try gen.noteOff(@intCast(u28, single.duration) * speed_multiplier, single.note);
+                try gen.noteOff(@intCast(u28, single.duration) * multiplier, single.note);
                 delay = 0;
             },
             .chord => |chord| {
@@ -56,7 +137,7 @@ pub fn main() !u8 {
                 try gen.noteOn(delay, chord.notes.items[0]);
                 for (chord.notes.items[1..]) |note| try gen.noteOn(0, note);
 
-                try gen.noteOff(@intCast(u28, chord.duration) * speed_multiplier, chord.notes.items[0]);
+                try gen.noteOff(@intCast(u28, chord.duration) * multiplier, chord.notes.items[0]);
                 for (chord.notes.items[1..]) |note| try gen.noteOff(0, note);
 
                 delay = 0;
@@ -64,8 +145,5 @@ pub fn main() !u8 {
         }
     }
 
-    var stdout = std.io.getStdOut();
-    try gen.commit(stdout.writer());
-
-    return 0;
+    try gen.commit(out);
 }
