@@ -68,3 +68,10 @@ Parsing took 0.041ms
 '000000001111223233' -> '000000001111222333' : single(B2, 1)
 Execution took 3.660ms
 ```
+
+I took the output and ran it through some processing:
+
+https://user-images.githubusercontent.com/12176994/172078777-b463f310-24f1-48e2-8890-7364ddef025a.mp4
+
+The first part should be completely unedited, but in the second one I shifted a few notes around just for fun :)
+
