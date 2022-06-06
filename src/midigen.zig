@@ -38,6 +38,15 @@ pub fn sequenceName(self: *@This(), name: []const u8) !void {
     try writer.writeAll(name);
 }
 
+pub fn text(self: *@This(), value: []const u8) !void {
+    const writer = self.buffer.writer();
+    try int(writer, 0);
+    try writer.writeByte(0xff);
+    try writer.writeByte(0x01);
+    try int(writer, @intCast(u28, value.len));
+    try writer.writeAll(value);
+}
+
 pub fn setTempo(self: *@This(), bpm: u9) !void {
     const writer = self.buffer.writer();
     const us_per_beat = std.time.us_per_min / @intCast(u64, bpm);
