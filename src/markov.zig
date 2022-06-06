@@ -173,12 +173,32 @@ pub const Interpreter = struct {
 
             if (found) {
                 const print = std.debug.print;
-                if (self.config.verbose) print("'{s}' -> ", .{self.state.items});
+
+                if (self.config.verbose) printMarked(self.state.items, i, i + rule.from.len);
+
                 try self.state.replaceRange(i, rule.from.len, rule.to);
-                if (self.config.verbose) print("'{s}' : {}\n", .{ self.state.items, rule.event });
+
+                if (self.config.verbose) {
+                    print(" -> ", .{});
+                    printMarked(self.state.items, i, i + rule.to.len);
+                    print(" : {}\n", .{rule.event});
+                }
+
                 break rule.event;
             }
         } else null;
+    }
+
+    fn printMarked(slice: []const u8, from: usize, to: usize) void {
+        const print = std.debug.print;
+        const first = slice[0..from];
+        const middle = slice[from..to];
+        const end = slice[to..];
+
+        print("'{s}", .{first});
+        print("\u{001b}[1m\u{001b}[32m\u{001b}[4m", .{});
+        print("{s}\u{001b}[0m", .{middle});
+        print("{s}'", .{end});
     }
 
     fn reachedMaxCount(self: *@This()) bool {
