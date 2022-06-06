@@ -17,6 +17,7 @@ pub const ParseError = error{
     InvalidNoteToken,
     NoPauseInMultiAllowed,
     NestedMultiEventsNotAllowed,
+    InvalidPatternToken,
 } || std.mem.Allocator.Error;
 
 arena: std.heap.ArenaAllocator,
@@ -49,8 +50,8 @@ pub fn parse(self: *@This()) !markov.RuleSet {
         switch (state) {
             .read_from => switch (token.tag) {
                 .comment => {},
-                .identifier => {
-                    current.from = self.tokenizer.getSlice(token);
+                .pattern => {
+                    current.from = try self.parsePattern(token);
                     state = .read_arrow;
                 },
                 else => return ParseError.UnexpectedToken,
@@ -60,8 +61,8 @@ pub fn parse(self: *@This()) !markov.RuleSet {
                 else => return ParseError.UnexpectedToken,
             },
             .read_to => switch (token.tag) {
-                .identifier => {
-                    current.to = self.tokenizer.getSlice(token);
+                .pattern => {
+                    current.to = try self.parsePattern(token);
                     state = .read_colon;
                 },
                 else => return ParseError.UnexpectedToken,
@@ -224,4 +225,18 @@ fn loadManyTokens(self: *@This(), comptime N: usize) ![N]Tokenizer.Token {
     }
 
     return arr;
+}
+
+fn parsePattern(self: *@This(), token: Tokenizer.Token) ![]const u8 {
+    if (token.tag != .pattern) {
+        return ParseError.InvalidPatternToken;
+    }
+
+    const slice = self.tokenizer.getSlice(token);
+
+    if (slice.len > 2) {
+        return slice[1 .. slice.len - 1];
+    } else {
+        return "";
+    }
 }

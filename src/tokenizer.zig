@@ -2,7 +2,7 @@ const std = @import("std");
 
 pub const Token = struct {
     pub const Tag = enum {
-        identifier,
+        pattern,
         number,
         paren_open,
         paren_close,
@@ -25,7 +25,7 @@ pub const Token = struct {
 
 const State = enum {
     begin,
-    read_identifier,
+    read_pattern,
     read_number,
     read_note_modifier,
     read_note_octave,
@@ -63,9 +63,9 @@ pub fn next(self: *@This()) ?Token {
                     token.tag = .note;
                     state = .read_note_modifier;
                 },
-                'a'...'z' => {
-                    token.tag = .identifier;
-                    state = .read_identifier;
+                '\'' => {
+                    token.tag = .pattern;
+                    state = .read_pattern;
                 },
                 '0'...'9' => {
                     token.tag = .number;
@@ -150,13 +150,12 @@ pub fn next(self: *@This()) ?Token {
                     break token;
                 },
             },
-            .read_identifier => switch (c) {
-                'A'...'Z', 'a'...'z' => {},
-                else => {
-                    token.end = self.index;
-                    self.index -= 1;
+            .read_pattern => switch (c) {
+                '\'' => {
+                    token.end = self.index + 1;
                     break token;
                 },
+                else => {},
             },
             .read_number => switch (c) {
                 '0'...'9' => {},
