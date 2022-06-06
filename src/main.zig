@@ -18,7 +18,6 @@ pub fn main() !void {
 
     const params = comptime clap.parseParamsComptime(
         \\-h, --help               Display this text and exit.
-        \\-s, --speed <u28>        Multiplier for midi delta-time values
         \\-t, --tempo <u9>         Tempo of the midi track
         \\-v, --verbose            Print state changes.
         \\-i, --initial <str>      The initial state of the interpreter.
@@ -43,8 +42,6 @@ pub fn main() !void {
         return err;
     };
     defer res.deinit();
-
-    const multiplier = res.args.speed orelse 120;
 
     if (res.args.help) {
         try clap.help(stderr, clap.Help, &params, .{});
@@ -91,7 +88,6 @@ pub fn main() !void {
         stdout,
         result,
         res.args.@"max-count",
-        multiplier,
         res.args.initial orelse "",
         res.args.verbose,
     );
@@ -118,7 +114,6 @@ fn generateMidi(
     out: anytype,
     result: markov.RuleSet,
     max_count: ?usize,
-    multiplier: u28,
     initial: []const u8,
     verbose: bool,
 ) !void {
@@ -132,10 +127,11 @@ fn generateMidi(
     while (try interp.nextAlternative()) |event| {
         switch (event) {
             .none => {},
-            .pause => |duration| delay += @intCast(u28, duration) * multiplier,
+            .pause => |duration| delay += durationToDeltaTime(duration, 480),
             .single => |single| {
+                const duration = durationToDeltaTime(single.duration, 480);
                 try gen.noteOn(delay, single.note);
-                try gen.noteOff(@intCast(u28, single.duration) * multiplier, single.note);
+                try gen.noteOff(duration, single.note);
                 delay = 0;
             },
             .chord => |chord| {
@@ -146,7 +142,9 @@ fn generateMidi(
                 try gen.noteOn(delay, chord.notes.items[0]);
                 for (chord.notes.items[1..]) |note| try gen.noteOn(0, note);
 
-                try gen.noteOff(@intCast(u28, chord.duration) * multiplier, chord.notes.items[0]);
+                const duration = durationToDeltaTime(chord.duration, 480);
+
+                try gen.noteOff(duration, chord.notes.items[0]);
                 for (chord.notes.items[1..]) |note| try gen.noteOff(0, note);
 
                 delay = 0;
@@ -155,4 +153,9 @@ fn generateMidi(
     }
 
     try gen.commit(out);
+}
+
+fn durationToDeltaTime(duration: markov.Duration, precision: u16) u28 {
+    const top = @intCast(u28, duration.numerator) * @intCast(u28, precision) * 4;
+    return top / @intCast(u28, duration.denominator);
 }

@@ -16,6 +16,7 @@ pub const Token = struct {
         brace_close,
         arrow,
         colon,
+        slash,
     };
 
     tag: Tag,
@@ -137,8 +138,9 @@ pub fn next(self: *@This()) ?Token {
                     state = .read_comment;
                 },
                 else => {
-                    token.tag = .invalid;
-                    token.end = self.index + 1;
+                    token.tag = .slash;
+                    token.end = self.index;
+                    self.index -= 1;
                     break token;
                 },
             },

@@ -18,6 +18,7 @@ pub const ParseError = error{
     NoPauseInMultiAllowed,
     NestedMultiEventsNotAllowed,
     InvalidPatternToken,
+    InvalidDuration,
 } || std.mem.Allocator.Error;
 
 arena: std.heap.ArenaAllocator,
@@ -142,28 +143,38 @@ fn parseEvent(self: *@This()) ParseError!markov.Event {
     return switch (peeked.tag) {
         .brace_open => {
             const note_list = try self.parseChord();
-            const rest = try self.loadManyTokens(3);
 
-            if (rest[0].tag != .comma) return ParseError.UnexpectedToken;
-            if (rest[2].tag != .paren_close) return ParseError.UnexpectedToken;
+            const next = try self.loadManyTokens(1);
+            if (next[0].tag != .comma) return ParseError.UnexpectedToken;
+
+            const duration = try self.parseDuration();
+
+            const last = try self.loadManyTokens(1);
+            if (last[0].tag != .paren_close) return ParseError.UnexpectedToken;
 
             return markov.Event{
                 .chord = .{
                     .notes = note_list,
-                    .duration = try self.parseNumber(usize, rest[1]),
+                    .duration = duration,
                 },
             };
         },
         .note => {
-            const rest = try self.loadManyTokens(4);
+            const note_token = try self.loadManyTokens(1);
+            const note = try self.parseNote(note_token[0]);
 
-            if (rest[1].tag != .comma) return ParseError.UnexpectedToken;
-            if (rest[3].tag != .paren_close) return ParseError.UnexpectedToken;
+            const comma = try self.loadManyTokens(1);
+            if (comma[0].tag != .comma) return ParseError.UnexpectedToken;
+
+            const duration = try self.parseDuration();
+
+            const last = try self.loadManyTokens(1);
+            if (last[0].tag != .paren_close) return ParseError.UnexpectedToken;
 
             return markov.Event{
                 .single = .{
-                    .note = try self.parseNote(rest[0]),
-                    .duration = try self.parseNumber(usize, rest[2]),
+                    .note = note,
+                    .duration = duration,
                 },
             };
         },
@@ -174,7 +185,7 @@ fn parseEvent(self: *@This()) ParseError!markov.Event {
             if (rest[3].tag != .paren_close) return ParseError.UnexpectedToken;
 
             return markov.Event{
-                .pause = try self.parseNumber(usize, rest[2]),
+                .pause = try self.parseDuration(),
             };
         },
         else => ParseError.UnexpectedToken,
@@ -239,4 +250,17 @@ fn parsePattern(self: *@This(), token: Tokenizer.Token) ![]const u8 {
     } else {
         return "";
     }
+}
+
+fn parseDuration(self: *@This()) !markov.Duration {
+    const tokens = try self.loadManyTokens(3);
+
+    if (tokens[0].tag != .number) return ParseError.UnexpectedToken;
+    if (tokens[1].tag != .slash) return ParseError.UnexpectedToken;
+    if (tokens[2].tag != .number) return ParseError.UnexpectedToken;
+
+    return markov.Duration{
+        .numerator = try self.parseNumber(u8, tokens[0]),
+        .denominator = try self.parseNumber(u8, tokens[2]),
+    };
 }

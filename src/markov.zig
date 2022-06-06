@@ -1,5 +1,21 @@
 const std = @import("std");
 
+pub const Duration = struct {
+    numerator: u8,
+    denominator: u8,
+
+    pub fn format(
+        self: Duration,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = fmt;
+        _ = options;
+        try writer.print("{}/{}", .{ self.numerator, self.denominator });
+    }
+};
+
 pub const Note = struct {
     pub const Modifier = enum(u8) {
         sharp = '#',
@@ -74,18 +90,18 @@ pub const Rule = struct {
 
 pub const NoteEvent = struct {
     note: Note,
-    duration: usize,
+    duration: Duration,
 };
 
 pub const ChordEvent = struct {
     notes: std.ArrayList(Note),
-    duration: usize,
+    duration: Duration,
 };
 
 pub const Event = union(enum) {
     single: NoteEvent,
     chord: ChordEvent,
-    pause: usize,
+    pause: Duration,
     none,
 
     pub fn format(
