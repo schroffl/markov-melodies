@@ -21,6 +21,7 @@ pub fn main() !void {
         \\-s, --speed <u28>        Multiplier for midi delta-time values
         \\-t, --tempo <u9>         Tempo of the midi track
         \\-v, --verbose            Print state changes.
+        \\-i, --initial <str>      The initial state of the interpreter.
         \\-m, --max-count <int>    Set the maximum amount of substitutions applied.
         \\                         This can be used to break infinite loops.
         \\<file>
@@ -31,6 +32,7 @@ pub fn main() !void {
         .u28 = clap.parsers.int(u28, 10),
         .u9 = clap.parsers.int(u9, 10),
         .file = clap.parsers.string,
+        .str = clap.parsers.string,
     };
 
     var diag = clap.Diagnostic{};
@@ -90,6 +92,7 @@ pub fn main() !void {
         result,
         res.args.@"max-count",
         multiplier,
+        res.args.initial orelse "",
         res.args.verbose,
     );
     const took_execution = timer.read();
@@ -116,9 +119,10 @@ fn generateMidi(
     result: markov.RuleSet,
     max_count: ?usize,
     multiplier: u28,
+    initial: []const u8,
     verbose: bool,
 ) !void {
-    var interp = try markov.Interpreter.init(allocator, "a", result, .{
+    var interp = try markov.Interpreter.init(allocator, initial, result, .{
         .max_count = max_count,
         .verbose = verbose,
     });
