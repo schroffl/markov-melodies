@@ -87,6 +87,32 @@ pub const Event = union(enum) {
     chord: ChordEvent,
     pause: usize,
     none,
+
+    pub fn format(
+        self: Event,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = fmt;
+        _ = options;
+
+        switch (self) {
+            .single => |ev| try writer.print("single({}, {})", .{ ev.note, ev.duration }),
+            .chord => |ev| {
+                try writer.print("chord({{", .{});
+
+                for (ev.notes.items) |note, i| {
+                    if (i > 0) try writer.print(", ", .{});
+                    try writer.print("{}", .{note});
+                }
+
+                try writer.print("}}, {})", .{ev.duration});
+            },
+            .pause => |duration| try writer.print("pause({})", .{duration}),
+            .none => try writer.print("none", .{}),
+        }
+    }
 };
 
 pub const RuleSet = std.ArrayList(Rule);
@@ -94,6 +120,7 @@ pub const RuleSet = std.ArrayList(Rule);
 pub const Interpreter = struct {
     pub const Config = struct {
         max_count: ?usize,
+        verbose: bool = false,
     };
 
     state: std.ArrayList(u8),
@@ -145,8 +172,10 @@ pub const Interpreter = struct {
             } else false;
 
             if (found) {
-                // std.log.debug("{s} -> {s}", .{ rule.from, rule.to });
+                const print = std.debug.print;
+                if (self.config.verbose) print("'{s}' -> ", .{self.state.items});
                 try self.state.replaceRange(i, rule.from.len, rule.to);
+                if (self.config.verbose) print("'{s}' : {}\n", .{ self.state.items, rule.event });
                 break rule.event;
             }
         } else null;

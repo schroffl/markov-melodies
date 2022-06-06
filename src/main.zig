@@ -20,6 +20,7 @@ pub fn main() !void {
         \\-h, --help               Display this text and exit.
         \\-s, --speed <u28>        Multiplier for midi delta-time values
         \\-t, --tempo <u9>         Tempo of the midi track
+        \\-v, --verbose            Print state changes.
         \\-m, --max-count <int>    Set the maximum amount of substitutions applied.
         \\                         This can be used to break infinite loops.
         \\<file>
@@ -89,6 +90,7 @@ pub fn main() !void {
         result,
         res.args.@"max-count",
         multiplier,
+        res.args.verbose,
     );
     const took_execution = timer.read();
 
@@ -114,9 +116,11 @@ fn generateMidi(
     result: markov.RuleSet,
     max_count: ?usize,
     multiplier: u28,
+    verbose: bool,
 ) !void {
     var interp = try markov.Interpreter.init(allocator, "a", result, .{
         .max_count = max_count,
+        .verbose = verbose,
     });
 
     var delay: u28 = 0;
