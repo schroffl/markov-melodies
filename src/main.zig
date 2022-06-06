@@ -76,13 +76,19 @@ pub fn main() !void {
     try stderr.print("Parsing took {d:.3}ms\n", .{nsToMs(took_parse)});
 
     timer.reset();
+
+    var gen = midigen.init(allocator);
+    try gen.sequenceName("markov-melodies");
+    try gen.setSignature();
+    try gen.setTempo(res.args.tempo orelse 120);
+
     try generateMidi(
         allocator,
+        &gen,
         stdout,
         result,
         res.args.@"max-count",
         multiplier,
-        res.args.tempo,
     );
     const took_execution = timer.read();
 
@@ -103,22 +109,17 @@ fn nsToMs(ns: u64) f64 {
 
 fn generateMidi(
     allocator: std.mem.Allocator,
+    gen: *midigen,
     out: anytype,
     result: markov.RuleSet,
     max_count: ?usize,
     multiplier: u28,
-    tempo: ?u9,
 ) !void {
-    var gen = midigen.init(allocator);
     var interp = try markov.Interpreter.init(allocator, "a", result, .{
         .max_count = max_count,
     });
 
     var delay: u28 = 0;
-
-    try gen.sequenceName("markov-melodies");
-    try gen.setSignature();
-    try gen.setTempo(tempo orelse 120);
 
     while (try interp.nextAlternative()) |event| {
         switch (event) {
