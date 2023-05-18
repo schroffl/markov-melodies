@@ -43,7 +43,7 @@ pub fn main() !void {
     };
     defer res.deinit();
 
-    if (res.args.help) {
+    if (res.args.help != 0) {
         try clap.help(stderr, clap.Help, &params, .{});
         return;
     }
@@ -89,7 +89,7 @@ pub fn main() !void {
         result,
         res.args.@"max-count",
         res.args.initial orelse "",
-        res.args.verbose,
+        res.args.verbose != 0,
     );
     const took_execution = timer.read();
 

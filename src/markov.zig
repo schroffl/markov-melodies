@@ -118,7 +118,7 @@ pub const Event = union(enum) {
             .chord => |ev| {
                 try writer.print("chord({{", .{});
 
-                for (ev.notes.items) |note, i| {
+                for (ev.notes.items, 0..) |note, i| {
                     if (i > 0) try writer.print(", ", .{});
                     try writer.print("{}", .{note});
                 }

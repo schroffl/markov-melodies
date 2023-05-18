@@ -99,7 +99,8 @@ pub fn int(writer: anytype, i: u28) !void {
     var tmp = i;
     var is_first = true;
     var buf: [4]u8 = undefined;
-    var fbs = std.io.fixedBufferStream(&buf).writer();
+    var fbs_backing = std.io.fixedBufferStream(&buf);
+    var fbs = fbs_backing.writer();
 
     // TODO: Can we find a way to not encode this in reverse order and then flipping the bytes?
     while (tmp != 0 or is_first) : (is_first = false) {
